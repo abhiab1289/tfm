@@ -1,66 +1,33 @@
 pipeline {
     agent any
 
-    parameters {
-        string(name: 'environment', defaultValue: 'default', description: 'Workspace/environment file to use for deployment')
-        booleanParam(name: 'autoApprove', defaultValue: false, description: 'Automatically run apply after generating plan?')
-    }
-    
-    environment {
-        AWS_ACCESS_KEY_ID     = AKIA27CTMB6Z4GEQL44P
-        AWS_SECRET_ACCESS_KEY = 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
-        TF_IN_AUTOMATION      = '1'
-    }
-
     stages {
-	stage('checkout') {
+        stage('chechout') {
             steps {
-                 script{
-                        dir("terraform")
-                        {
-                            checkout([$class: 'GitSCM', branches: [[name: '*/main']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/abhiab1289/tfm.git']]])
-                        }
-                    }
-                }
+checkout([$class: 'GitSCM', branches: [[name: '*/master']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/abhiab1289/phpapp.git']]])
             }
-    stage('Plan') {
-            steps {
-                script {
-                    dir("terraform")
-                   { 
-                sh 'terraform init -input=false'
-                sh 'terraform workspace select ${environment}'
-                sh "terraform plan -out tfplan"
-                sh 'terraform show -no-color tfplan > tfplan.txt'
-                              }
-                }      
         }
-	}
-    stage('Approval') {
-            when {
-                not {
-                    equals expected: true, actual: params.autoApprove
-                }
-            }
+    
 
+        stage('app build') {
             steps {
-                script {
-                    def userInput = input(id: 'confirm', message: 'Apply Terraform?', parameters: [ [$class: 'BooleanParameterDefinition', defaultValue: false, description: 'Apply terraform', name: 'confirm'] ])
-                }
-            }
+    sshPublisher(publishers: [sshPublisherDesc(configName: 'tomcat', transfers: [sshTransfer(cleanRemote: false, excludes: '', execCommand: '''sudo cp index.php /var/lib/docker/volumes/vol
+''', execTimeout: 120000, flatten: false, makeEmptyDirs: false, noDefaultExcludes: false, patternSeparator: '[, ]+', remoteDirectory: '', remoteDirectorySDF: false, removePrefix: '', sourceFiles: 'index.php')], usePromotionTimestamp: false, useWorkspaceInPromotion: false, verbose: false)])
+
+            }   
+        }
+    
+
+        stage('Docker build') {
+            steps {
+sshPublisher(publishers: [sshPublisherDesc(configName: 'tomcat', transfers: [sshTransfer(cleanRemote: false, excludes: '', execCommand: '''sudo docker build -t abrepohub/images:ubuntu .
+sudo docker kill $(docker ps -q)
+sudo docker rm $(docker ps -a -q)
+sudo docker run -dit -p80:80 -v /var/lib/docker/volumes/vol:/var/www/html --name apache1 abrepohub/images:ubuntu
+sudo docker run -dit -p81:80 -v /var/lib/docker/volumes/vol:/var/www/html --name apache2 abrepohub/images:ubuntu
+sudo docker run -dit -p82:80 -v /var/lib/docker/volumes/vol:/var/www/html --name apache3 abrepohub/images:ubuntu
+sudo docker image prune -a -f''', execTimeout: 120000, flatten: false, makeEmptyDirs: false, noDefaultExcludes: false, patternSeparator: '[, ]+', remoteDirectory: '', remoteDirectorySDF: false, removePrefix: '', sourceFiles: 'Dockerfile')], usePromotionTimestamp: false, useWorkspaceInPromotion: false, verbose: false)])
+                  }
+       }
     }
-
-    stage('Apply') {
-            steps {
-			script {
-                    dir("terraform")
-					{
-					sh "terraform apply -input=false tfplan"
-					}
-				}
-		   }
-	}
-
-}
-
 }
